@@ -1,0 +1,364 @@
+TU-E-NEWS-BACKEND (folder):
+----config (folder):
+	----db.js (file):
+			const mongoose = require('mongoose');
+
+			const connectDB = async () => {
+				try {
+					// Connect to MongoDB without deprecated options
+					const conn = await mongoose.connect(process.env.MONGO_URI);
+					console.log(`MongoDB Connected: ${conn.connection.host}`);
+				} catch (error) {
+					console.error('MongoDB connection error:', error.message);
+					process.exit(1); // Exit the process if connection fails
+				}
+			};
+
+			module.exports = connectDB;
+
+
+----controllers (folder):
+	----articleController.js (file):
+			const Article = require('../models/Article');
+
+			// @desc    Create a new article
+			// @route   POST /api/articles
+			// @access  Public
+			const createArticle = async (req, res) => {
+				try {
+					const { title, content, category, tags, image } = req.body;
+
+					const article = new Article({
+						userId: req.user.id, // attach logged-in user's id
+						title,
+						content,
+						category,
+						tags,
+						image
+					});
+					console.log('req.user:', req.user);
+					await article.save();
+
+					res.status(201).json({
+						success: true,
+						data: article
+					});
+				} catch (error) {
+					console.error(error);
+					res.status(500).json({ success: false, message: 'Server Error' });
+				}
+			};
+
+
+			// @desc    Get all articles
+			// @route   GET /api/articles
+			// @access  Public
+			const getArticles = async (req, res) => {
+				try {
+					const articles = await Article.find().sort({ createdAt: -1 });
+
+					res.status(200).json({
+						success: true,
+						count: articles.length,
+						data: articles
+					});
+				} catch (error) {
+					res.status(500).json({ success: false, error: error.message });
+				}
+			};
+
+			module.exports = {
+				createArticle,
+				getArticles
+			};
+
+	----authController.js (file):
+			const User = require('../models/User');
+			const bcrypt = require('bcryptjs');
+			const jwt = require('jsonwebtoken');
+
+			// REGISTER
+			exports.registerUser = async (req, res) => {
+				const { name, email, password, role } = req.body;
+
+				try {
+					let user = await User.findOne({ email });
+					if (user) {
+						return res.status(400).json({ msg: 'User already exists' });
+					}
+
+					user = new User({ name, email, password, role });
+
+					const salt = await bcrypt.genSalt(10);
+					user.password = await bcrypt.hash(password, salt);
+
+					await user.save();
+
+					const payload = {
+						user: {
+							id: user.id,
+							role: user.role
+						}
+					};
+
+					jwt.sign(
+						payload,
+						process.env.JWT_SECRET,
+						{ expiresIn: '7d' },
+						(err, token) => {
+							if (err) throw err;
+							res.status(201).json({ token });
+						}
+					);
+
+				} catch (err) {
+					console.error(err.message);
+					res.status(500).send('Server Error');
+				}
+			};
+
+			// LOGIN
+			exports.loginUser = async (req, res) => {
+				const { email, password } = req.body;
+
+				try {
+					let user = await User.findOne({ email });
+					if (!user) {
+						return res.status(400).json({ msg: 'Invalid Credentials' });
+					}
+
+					const isMatch = await bcrypt.compare(password, user.password);
+					if (!isMatch) {
+						return res.status(400).json({ msg: 'Invalid Credentials' });
+					}
+
+					const payload = {
+						user: {
+							id: user.id,
+							role: user.role
+						}
+					};
+
+					jwt.sign(
+						payload,
+						process.env.JWT_SECRET,
+						{ expiresIn: '7d' },
+						(err, token) => {
+							if (err) throw err;
+							res.json({ token });
+						}
+					);
+
+				} catch (err) {
+					console.error(err.message);
+					res.status(500).send('Server Error');
+				}
+			};
+
+
+----middlewares (folder):
+	----authMiddleware.js (file):
+			const jwt = require('jsonwebtoken');
+			const User = require('../models/User'); // 👈 import your user model
+
+			const protect = async (req, res, next) => {
+				let token;
+
+				if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+					try {
+						// Get token from header
+						token = req.headers.authorization.split(' ')[1];
+
+						// Verify token
+						const decoded = jwt.verify(token, process.env.JWT_SECRET);
+						console.log(decoded); // Log the decoded token
+
+						// 👇 Fetch user from DB using the id from the decoded token
+						const user = await User.findById(decoded.user.id);  // Use req.user.id now
+						if (!user) {
+							return res.status(404).json({ message: 'User not found' });
+						}
+						
+						req.user = user;
+
+						next();
+					} catch (error) {
+						return res.status(401).json({ message: 'Not authorized, token failed' });
+					}
+				}
+
+				if (!token) {
+					return res.status(401).json({ success: false, message: 'Not authorized, no token' });
+				}
+			};
+
+			module.exports = { protect };
+
+
+----models (folder):
+	----Article.js (file):
+			const mongoose = require('mongoose');
+
+			const articleSchema = new mongoose.Schema({
+				userId: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'User', // Refers to the User model
+					required: true
+				},
+				title: {
+					type: String,
+					required: [true, 'Article must have a title']
+				},
+				content: {
+					type: String,
+					required: [true, 'Article must have content']
+				},
+				author: {
+					type: String,
+					default: 'Anonymous'
+				},
+				createdAt: {
+					type: Date,
+					default: Date.now
+				}
+				
+			});
+
+			const Article = mongoose.model('Article', articleSchema);
+
+			module.exports = Article;
+
+	----User.js (file):
+			const mongoose = require('mongoose');
+
+			const userSchema = new mongoose.Schema({
+				name: {
+					type: String,
+					required: true,
+				},
+				email: {
+					type: String,
+					required: true,
+					unique: true,
+				},
+				password: {
+					type: String,
+					required: true,
+				},
+				role: {
+					type: String,
+					enum: ['admin', 'editor', 'reader'],
+					default: 'reader',
+				}
+			}, { timestamps: true });
+
+			module.exports = mongoose.model('User', userSchema);
+
+
+----node_modules (folder):
+		hell lotta files.
+
+----routes (folder):
+	----articleRoutes.js (file):
+			const express = require('express');
+			const router = express.Router();
+			const { createArticle, getArticles } = require('../controllers/articleController');
+			const { protect } = require('../middlewares/authMiddleware');
+
+			router.post('/', protect, createArticle); // Protected ✅
+			router.get('/', getArticles); // Public
+
+			module.exports = router;		
+
+	----authRoutes.js (file):
+			const express = require('express');
+			const router = express.Router();
+			const { registerUser, loginUser } = require('../controllers/authController');
+
+			// @route POST /api/auth/register
+			router.post('/register', registerUser);
+
+			// @route POST /api/auth/login
+			router.post('/login', loginUser);
+
+			module.exports = router;
+
+
+----.env (file):
+		PORT=5000
+		MONGO_URI=mongodb+srv://imcsk2047:Mydb123@cluster0.2ok4j5o.mongodb.net/emagazine_db
+		JWT_SECRET=supersecretkey
+
+
+----app.js (file):
+		const express = require('express');
+		const cors = require('cors');
+		const helmet = require('helmet');
+		const connectDB = require('./config/db');
+		const authRoutes = require('./routes/authRoutes');
+		const articleRoutes = require('./routes/articleRoutes');
+
+		require('dotenv').config();
+
+		const app = express();
+
+		// Connect to database
+		connectDB();
+
+		// Middlewares
+		app.use(express.json()); // Body parser
+		app.use(cors());          // Enable CORS
+		app.use(helmet());        // Secure headers
+
+		// Routes
+		app.use('/api/auth', authRoutes);
+		app.use('/api/articles', articleRoutes);
+
+		// Test route
+		app.get('/', (req, res) => {
+			res.send('Welcome to TU-e-News Backend 🚀');
+		});
+
+		module.exports = app;
+
+
+----package-lock.json (file)
+
+
+----package.json (file):
+		{
+		"name": "tu-e-news-backend",
+		"version": "1.0.0",
+		"description": "",
+		"main": "index.js",
+		"scripts": {
+			"test": "echo \"Error: no test specified\" && exit 1"
+		},
+		"keywords": [],
+		"author": "",
+		"license": "ISC",
+		"type": "commonjs",
+		"dependencies": {
+			"bcryptjs": "^3.0.2",
+			"cors": "^2.8.5",
+			"dotenv": "^16.5.0",
+			"express": "^5.1.0",
+			"helmet": "^8.1.0",
+			"jsonwebtoken": "^9.0.2",
+			"mongoose": "^8.14.0"
+		},
+		"devDependencies": {
+			"nodemon": "^3.1.10"
+		}
+		}
+
+
+----server.js (file):
+		const app = require('./app');
+		require('dotenv').config();
+
+		const PORT = process.env.PORT || 5000;
+
+		app.listen(PORT, () => {
+			console.log(`Server running on http://localhost:${PORT}`);
+		});
