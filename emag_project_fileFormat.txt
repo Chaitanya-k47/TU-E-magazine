@@ -1,8 +1,8 @@
 TU-E-NEWS-BACKEND (folder):
 ----config (folder):
 	----db.js (file):
-			const mongoose = require('mongoose');
 
+			const mongoose = require('mongoose');
 			const connectDB = async () => {
 				try {
 					// Connect to MongoDB without deprecated options
@@ -19,8 +19,8 @@ TU-E-NEWS-BACKEND (folder):
 
 ----controllers (folder):
 	----articleController.js (file):
-			const Article = require('../models/Article');
 
+			const Article = require('../models/Article');
 			// @desc    Create a new article
 			// @route   POST /api/articles
 			// @access  Public
@@ -49,7 +49,6 @@ TU-E-NEWS-BACKEND (folder):
 				}
 			};
 
-
 			// @desc    Get all articles
 			// @route   GET /api/articles
 			// @access  Public
@@ -72,11 +71,12 @@ TU-E-NEWS-BACKEND (folder):
 				getArticles
 			};
 
+
 	----authController.js (file):
+
 			const User = require('../models/User');
 			const bcrypt = require('bcryptjs');
 			const jwt = require('jsonwebtoken');
-
 			// REGISTER
 			exports.registerUser = async (req, res) => {
 				const { name, email, password, role } = req.body;
@@ -158,9 +158,9 @@ TU-E-NEWS-BACKEND (folder):
 
 ----middlewares (folder):
 	----authMiddleware.js (file):
+
 			const jwt = require('jsonwebtoken');
 			const User = require('../models/User'); // 👈 import your user model
-
 			const protect = async (req, res, next) => {
 				let token;
 
@@ -197,8 +197,8 @@ TU-E-NEWS-BACKEND (folder):
 
 ----models (folder):
 	----Article.js (file):
-			const mongoose = require('mongoose');
 
+			const mongoose = require('mongoose');
 			const articleSchema = new mongoose.Schema({
 				userId: {
 					type: mongoose.Schema.Types.ObjectId,
@@ -228,9 +228,10 @@ TU-E-NEWS-BACKEND (folder):
 
 			module.exports = Article;
 
-	----User.js (file):
-			const mongoose = require('mongoose');
 
+	----User.js (file):
+
+			const mongoose = require('mongoose');
 			const userSchema = new mongoose.Schema({
 				name: {
 					type: String,
@@ -260,6 +261,7 @@ TU-E-NEWS-BACKEND (folder):
 
 ----routes (folder):
 	----articleRoutes.js (file):
+
 			const express = require('express');
 			const router = express.Router();
 			const { createArticle, getArticles } = require('../controllers/articleController');
@@ -270,7 +272,9 @@ TU-E-NEWS-BACKEND (folder):
 
 			module.exports = router;		
 
+
 	----authRoutes.js (file):
+
 			const express = require('express');
 			const router = express.Router();
 			const { registerUser, loginUser } = require('../controllers/authController');
@@ -285,12 +289,14 @@ TU-E-NEWS-BACKEND (folder):
 
 
 ----.env (file):
+
 		PORT=5000
 		MONGO_URI=mongodb+srv://imcsk2047:Mydb123@cluster0.2ok4j5o.mongodb.net/emagazine_db
 		JWT_SECRET=supersecretkey
 
 
 ----app.js (file):
+
 		const express = require('express');
 		const cors = require('cors');
 		const helmet = require('helmet');
@@ -326,6 +332,7 @@ TU-E-NEWS-BACKEND (folder):
 
 
 ----package.json (file):
+
 		{
 		"name": "tu-e-news-backend",
 		"version": "1.0.0",
@@ -354,6 +361,7 @@ TU-E-NEWS-BACKEND (folder):
 
 
 ----server.js (file):
+
 		const app = require('./app');
 		require('dotenv').config();
 
