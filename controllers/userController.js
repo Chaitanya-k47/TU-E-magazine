@@ -1,171 +1,168 @@
 // controllers/userController.js
 const User = require('../models/User');
-const bcrypt = require('bcryptjs'); // Needed for admin user creation
+const bcrypt = require('bcryptjs');
+const asyncHandler = require('../middlewares/asyncHandler');
+const { ErrorResponse } = require('../middlewares/errorMiddleware');
 
 // @desc    Get all users (Admin only)
 // @route   GET /api/users
 // @access  Private/Admin
-exports.getUsers = async (req, res) => {
-  try {
-    // Exclude passwords from the result
+exports.getUsers = asyncHandler(async (req, res, next) => {
     const users = await User.find().select('-password');
     res.status(200).json({ success: true, count: users.length, data: users });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-};
+});
 
 // @desc    Get single user by ID (Admin only)
 // @route   GET /api/users/:id
 // @access  Private/Admin
-exports.getUserById = async (req, res) => {
-  try {
+exports.getUserById = asyncHandler(async (req, res, next) => {
+    // ID format validation is handled by express-validator (isMongoId)
     const user = await User.findById(req.params.id).select('-password');
 
     if (!user) {
-      return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
+        return next(new ErrorResponse(`User not found with id of ${req.params.id}`, 404));
     }
-
     res.status(200).json({ success: true, data: user });
-  } catch (err) {
-    console.error(err.message);
-    // Handle potential CastError if ID format is invalid
-    if (err.name === 'CastError') {
-        return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
-    }
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-};
+});
 
 // @desc    Create user (Admin only - allows setting role)
 // @route   POST /api/users
 // @access  Private/Admin
-exports.createUser = async (req, res) => {
-  const { name, email, password, role } = req.body;
+exports.createUser = asyncHandler(async (req, res, next) => {
+    // Validation for name, email, password, role is handled by express-validator
+    const { name, email, password, role } = req.body;
 
-  // Basic validation
-  if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
-  }
-
-  // Validate role if provided
-  if (role && !['reader', 'editor', 'admin'].includes(role)) {
-       return res.status(400).json({ success: false, message: `Invalid role specified: ${role}` });
-  }
-
-  try {
     let user = await User.findOne({ email });
     if (user) {
-      return res.status(400).json({ success: false, message: 'User already exists' });
+      return next(new ErrorResponse('User already exists with this email', 400));
     }
 
-    // Create user instance
     user = new User({
         name,
         email,
-        password,
-        role: role || 'reader' // Default to 'reader' if role not specified by admin
+        password, // Hashed below or by pre-save hook
+        role: role || User.schema.path('role').defaultValue
     });
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
 
     await user.save();
 
-    // Exclude password from response
     const userResponse = user.toObject();
     delete userResponse.password;
 
     res.status(201).json({ success: true, data: userResponse });
+});
 
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-};
-
-
-// @desc    Update user details (Admin only - including role)
+// @desc    Update user details (Admin can update any user's role, name, email. User can update their own name, email)
 // @route   PUT /api/users/:id
-// @access  Private/Admin
-exports.updateUser = async (req, res) => {
-  const { name, email, role } = req.body;
-  const fieldsToUpdate = {};
+// @access  Private (Admin or Owner of the account for name/email)
+exports.updateUser = asyncHandler(async (req, res, next) => {
+    const { name, email, role } = req.body; // Role will only be processed if user is admin
+    const userIdToUpdate = req.params.id;
+    const loggedInUser = req.user; // From 'protect' middleware
 
-  if (name) fieldsToUpdate.name = name;
-  if (email) fieldsToUpdate.email = email; // Consider checking if the new email is already taken
-  if (role) {
-    // Validate role
-    if (!['reader', 'editor', 'admin'].includes(role)) {
-      return res.status(400).json({ success: false, message: `Invalid role specified: ${role}` });
+    const fieldsToUpdate = {};
+
+    // Authorization:
+    // 1. Admin can update anything specified for any user.
+    // 2. Non-admin can only update their own name and email. They cannot change their role or other users.
+    if (loggedInUser.role === 'admin') {
+        if (req.body.hasOwnProperty('name')) fieldsToUpdate.name = name;
+        if (req.body.hasOwnProperty('email')) fieldsToUpdate.email = email;
+        if (req.body.hasOwnProperty('role')) { // Only admin can change role
+            if (!User.schema.path('role').enumValues.includes(role)) {
+                return next(new ErrorResponse(`Invalid role: ${role}`, 400));
+            }
+            // Prevent admin from accidentally demoting the last admin (more complex logic needed for this robustly)
+            // Prevent admin from demoting themselves if they are the one being updated via this general route by ID
+            if (loggedInUser.id === userIdToUpdate && role !== 'admin') {
+                 return next(new ErrorResponse('Admins cannot change their own role to non-admin via this route.', 400));
+            }
+            fieldsToUpdate.role = role;
+        }
+    } else if (loggedInUser.id === userIdToUpdate) {
+        // Non-admin updating their own profile
+        if (req.body.hasOwnProperty('name')) fieldsToUpdate.name = name;
+        if (req.body.hasOwnProperty('email')) fieldsToUpdate.email = email;
+        if (req.body.hasOwnProperty('role') && role !== loggedInUser.role) {
+            return next(new ErrorResponse('You are not authorized to change your role.', 403));
+        }
+    } else {
+        // Non-admin trying to update someone else's profile
+        return next(new ErrorResponse('You are not authorized to update this user.', 403));
     }
-    fieldsToUpdate.role = role;
-  }
 
-  // Do not allow password updates via this route. Create a separate password reset flow.
-
-  try {
-    // Check if user exists first
-    let user = await User.findById(req.params.id);
-     if (!user) {
-        return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
+    // Check if user exists
+    let userToUpdate = await User.findById(userIdToUpdate);
+    if (!userToUpdate) {
+        return next(new ErrorResponse(`User not found with id of ${userIdToUpdate}`, 404));
     }
 
-    // Optional: Check if updated email already exists for another user
-    if (email && email !== user.email) {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: `Email ${email} is already in use` });
+    // Email uniqueness check if email is being changed
+    if (fieldsToUpdate.email && fieldsToUpdate.email !== userToUpdate.email) {
+        const existingUserWithEmail = await User.findOne({ email: fieldsToUpdate.email });
+        if (existingUserWithEmail && existingUserWithEmail._id.toString() !== userIdToUpdate) {
+             return next(new ErrorResponse(`Email ${fieldsToUpdate.email} is already in use.`, 400));
         }
     }
 
-
-    // Update user
-    user = await User.findByIdAndUpdate(req.params.id, { $set: fieldsToUpdate }, {
-      new: true, // Return the updated document
-      runValidators: true // Run schema validators on update
-    }).select('-password'); // Exclude password from the returned object
-
-    res.status(200).json({ success: true, data: user });
-
-  } catch (err) {
-    console.error(err.message);
-     // Handle potential CastError if ID format is invalid
-    if (err.name === 'CastError') {
-        return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
+    // Only proceed if there are actual fields to update
+    if (Object.keys(fieldsToUpdate).length === 0) {
+        // Fetch again without password to send back current data if no changes
+        const currentUserData = await User.findById(userIdToUpdate).select('-password');
+        return res.status(200).json({ success: true, data: currentUserData, message: "No changes provided." });
     }
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-};
+
+    const updatedUser = await User.findByIdAndUpdate(userIdToUpdate, { $set: fieldsToUpdate }, {
+        new: true,
+        runValidators: true
+    }).select('-password');
+
+    if (!updatedUser) { // Should not happen normally
+        return next(new ErrorResponse(`User update failed for id ${userIdToUpdate}`, 500));
+    }
+
+    res.status(200).json({ success: true, data: updatedUser });
+});
 
 // @desc    Delete user (Admin only)
 // @route   DELETE /api/users/:id
 // @access  Private/Admin
-exports.deleteUser = async (req, res) => {
-  try {
+exports.deleteUser = asyncHandler(async (req, res, next) => {
+    // ID format validation is handled by express-validator
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
+        return next(new ErrorResponse(`User not found with id of ${req.params.id}`, 404));
     }
 
-    // Optional: Prevent admin from deleting themselves
-    // if (user._id.toString() === req.user.id) {
-    //     return res.status(400).json({ success: false, message: `Admin cannot delete their own account via this route` });
-    // }
-
-    await User.deleteOne({ _id: req.params.id }); // Use deleteOne with filter
-
-    res.status(200).json({ success: true, message: 'User removed successfully', data: {} }); // Standard practice to return empty object
-
-  } catch (err) {
-    console.error(err.message);
-     // Handle potential CastError if ID format is invalid
-    if (err.name === 'CastError') {
-        return res.status(404).json({ success: false, message: `User not found with id of ${req.params.id}` });
+    if (req.user && user._id.toString() === req.user.id) {
+         return next(new ErrorResponse('Admin cannot delete their own account via this route', 400));
     }
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-};
+
+    await User.deleteOne({ _id: req.params.id });
+    res.status(200).json({ success: true, message: 'User removed successfully', data: {} });
+});
+
+// @desc    Get users eligible to be authors (editors, admins)
+// @route   GET /api/users/authors
+// @access  Private (Editor, Admin)
+exports.getPotentialAuthors = asyncHandler(async (req, res, next) => {
+    // Define roles eligible to be authors
+    const authorRoles = ['editor', 'admin'];
+
+    // Fetch users with these roles, selecting only necessary fields
+    // Exclude the currently logged-in user from the list if desired (optional)
+    // const users = await User.find({ role: { $in: authorRoles }, _id: { $ne: req.user.id } }) // Excludes self
+    const users = await User.find({ role: { $in: authorRoles } }) // Includes self if they have the role
+        .select('_id name email role') // Select fields needed for the dropdown
+        .sort({ name: 1 }); // Sort by name
+
+    res.status(200).json({
+        success: true,
+        count: users.length,
+        data: users
+    });
+});
