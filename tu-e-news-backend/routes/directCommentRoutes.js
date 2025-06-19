@@ -1,8 +1,13 @@
+<<<<<<< HEAD
 // routes/directCommentRoutes.js
+=======
+// routes/directCommentRoutes.js (or simply comments.js if you prefer)
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 const express = require('express');
 const { deleteComment } = require('../controllers/commentController');
 const { protect } = require('../middlewares/authMiddleware');
 
+<<<<<<< HEAD
 const { param, validationResult } = require('express-validator');
 const { ErrorResponse } = require('../middlewares/errorMiddleware');
 
@@ -32,5 +37,11 @@ router.delete(
     handleValidationErrors,
     deleteComment
 );
+=======
+const router = express.Router();
+
+// DELETE /api/comments/:commentId
+router.delete('/:commentId', protect, deleteComment);
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 
 module.exports = router;

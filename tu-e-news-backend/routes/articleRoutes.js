@@ -7,6 +7,7 @@ const {
     getArticleById,
     updateArticle,
     deleteArticle,
+<<<<<<< HEAD
     getMyArticles,
     updateArticleStatus,
     likeArticle,
@@ -228,5 +229,30 @@ router.put('/:id/status', protect, authorize('admin'), updateStatusValidationRul
 // If you have: articleRoutes.use('/:articleId/comments', commentRoutes);
 // then ensure that commentRoutes handles its own param validation for :articleId if needed,
 // or that it inherits it if mergeParams: true is used in commentRoutes.
+=======
+    updateArticleStatus,
+    likeArticle,
+    translateArticle
+} = require('../controllers/articleController');
+
+// Import Middlewares
+const { protect } = require('../middlewares/authMiddleware');
+const { authorize } = require('../middlewares/authorizeMiddleware');
+
+// --- Public Routes ---
+router.get('/', getArticles);
+router.get('/:id', getArticleById);
+
+// --- Protected Routes ---
+router.post('/', protect, authorize('admin', 'editor'), createArticle);
+router.put('/:id', protect, updateArticle);
+router.delete('/:id', protect, deleteArticle);
+router.put('/:id/status', protect, authorize('admin'), updateArticleStatus);
+router.put('/:id/like', protect, likeArticle);
+router.post('/:id/translate', protect, authorize('admin', 'editor'), translateArticle);
+
+
+// Add routes for Comments, Translation later
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 
 module.exports = router;

@@ -1,11 +1,21 @@
 // models/Article.js
 const mongoose = require('mongoose');
 
+<<<<<<< HEAD
 const approvalSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+=======
+const articleSchema = new mongoose.Schema({
+    // === Existing Fields ===
+    userId: { // Renamed from authorId in SRS schema example for consistency with your code
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User', // Refers to the User model
+        required: true,
+        index: true // Indexing for potential author-based filtering
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
     },
     approved: {
         type: Boolean,
@@ -39,6 +49,7 @@ const articleSchema = new mongoose.Schema({
         required: [true, 'Article must belong to a category'],
         enum: ['Academics', 'Events', 'Research', 'Campus Life', 'Achievements', 'Announcements', 'Other'], // Example categories from SRS context - adjust as needed
         index: true // Indexing for category filtering
+<<<<<<< HEAD
     },
     status: {
         type: String,
@@ -78,12 +89,46 @@ const articleSchema = new mongoose.Schema({
         default: '' // Store the URL of the image
     },
     
+=======
+    },
+    status: {
+        type: String,
+        enum: ['Draft', 'Pending', 'Published', 'Rejected'],
+        default: 'Draft', // Default status when an editor creates an article
+        required: true,
+        index: true // Indexing for filtering by status (e.g., getting published articles)
+    },
+    language: {
+        type: String,
+        default: 'en', // Default language (e.g., English)
+        required: true
+    },
+    translatedContent: {
+        // Stores translations as key-value pairs, e.g., { "es": "...", "fr": "..." }
+        type: Map,
+        of: String, // Values in the map will be strings
+        default: {}
+    },
+    plagiarismStatus: {
+        type: String,
+        enum: ['Not Checked', 'Pending', 'Checked - OK', 'Checked - Flagged', 'Check Failed'], // More explicit statuses
+        default: 'Not Checked',
+        required: true
+    },
+
+    // --- Multimedia Fields ---
+    imageUrl: { // For a primary image associated with the article
+        type: String,
+        default: '' // Store the URL of the image
+    },
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
     attachments: [{ // Array to store URLs or references to attached files (PDFs, etc.)
         fileName: String, // Optional: Store original filename
         fileUrl: String, // URL to the stored file
         fileType: String // Optional: MIME type (e.g., 'application/pdf')
     }],
 
+<<<<<<< HEAD
     // --- MODIFIED LIKES ---
     likedBy: [{ // Array of User IDs who liked this article
         type: mongoose.Schema.Types.ObjectId,
@@ -134,10 +179,26 @@ const articleSchema = new mongoose.Schema({
     }
     // --- END NEW FIELDS ---
 
+=======
+    // --- Engagement (Optional - can be added later if preferred) ---
+    likes: {
+        type: Number,
+        default: 0
+    },
+    // Optional: Store users who liked to prevent multiple likes
+    // likedBy: [{
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: 'User'
+    // }],
+
+    // === Removed Field ===
+    // author: { type: String, default: 'Anonymous' }, // Removed - Use populated userId.name instead
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 
 
 }, { timestamps: true }); // Automatically adds createdAt and updatedAt fields
 
+<<<<<<< HEAD
 // Text index
 articleSchema.index(
     {
@@ -158,4 +219,11 @@ articleSchema.index({ userIds: 1 });
 articleSchema.index({ publishedAt: -1 }); // If not already there from previous step
 
 const Article = mongoose.model('Article', articleSchema);
+=======
+// Optional: Add a text index for searching title and content
+// articleSchema.index({ title: 'text', content: 'text' }); // Uncomment if you plan text search
+
+const Article = mongoose.model('Article', articleSchema);
+
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 module.exports = Article;

@@ -8,8 +8,12 @@ const articleRoutes = require('./routes/articleRoutes');
 const userRoutes = require('./routes/userRoutes');
 const commentRoutes = require('./routes/commentRoutes'); // Import comment routes for nesting
 const directCommentRoutes = require('./routes/directCommentRoutes'); // Import direct comment routes
+<<<<<<< HEAD
 const adminRoutes = require('./routes/adminRoutes');
 const { errorHandler } = require('./middlewares/errorMiddleware');
+=======
+
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 
 require('dotenv').config();
 
@@ -55,7 +59,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/comments', directCommentRoutes);
+<<<<<<< HEAD
 app.use('/api/admin', adminRoutes);
+=======
+>>>>>>> 3ff55140633ef0d5ad84ff3d20107e42d53ba59e
 
 // Mount nested comment routes under articles
 // This line means that requests to /api/articles/:articleId/comments will be handled by commentRoutes
